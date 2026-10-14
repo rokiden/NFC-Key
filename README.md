@@ -96,6 +96,40 @@ Replace `server_name` with the host alias used in your `ssh` command. `Match` ch
 
 A false `Match` does **not** abort the SSH connection. If NFC loading fails, SSH may still authenticate using other configured methods or identities. This configuration is not a fail-closed authentication requirement. Also, directives following a `Match` remain in that conditional section until the next `Host` or `Match` line.
 
+## User systemd SSH agent
+
+The following user unit runs `ssh-agent` on a stable socket and publishes `SSH_AUTH_SOCK` to D-Bus/systemd activation. This approach fits modern **systemd-based** Linux desktop sessions.
+
+```sh
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/ssh-agent.service <<'EOF'
+[Unit]
+Description=SSH authentication agent
+Wants=dbus.socket
+After=dbus.socket
+Before=graphical-session-pre.target
+
+[Service]
+Type=simple
+Environment="SSH_AUTH_SOCK=%t/ssh-agent.socket"
+ExecStart=/usr/bin/ssh-agent -D -a ${SSH_AUTH_SOCK}
+ExecStartPost=dbus-update-activation-environment --systemd --verbose SSH_AUTH_SOCK=${SSH_AUTH_SOCK}
+ExecStop=dbus-update-activation-environment --systemd --verbose SSH_AUTH_SOCK=
+ExecStop=/usr/bin/ssh-agent -k
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now ssh-agent.service
+```
+
+`%t` resolves to the user runtime directory, typically `$XDG_RUNTIME_DIR`. The shell running `ssh` and `nfc-key` must also have `SSH_AUTH_SOCK` set to the agent socket; if your session does not inherit it, set it in your shell startup file:
+
+```sh
+export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR}/ssh-agent.socket"
+```
+
 ## Security and operational limitations
 
 - The tag payload is XOR masking, not encryption or a proof that the original physical tag is present. Anyone who obtains both the tag data and the local mask can reconstruct the key.
