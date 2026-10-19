@@ -89,7 +89,7 @@ On a match, the tool prints `NFC Key: Already loaded, skipping.` to stderr. This
 To invoke the loader when connecting to a specific SSH host alias, add a `Match` condition to `~/.ssh/config`:
 
 ```sshconfig
-Match host server_name exec "nfc-key load --only-missing; exit 1"
+Match final Host server_name exec "nfc-key load --only-missing; exit 1"
 ```
 
 Replace `server_name` with the host alias used in your `ssh` command. `Match` checks both the host and the `exec` condition; the command runs locally for that host. The trailing `; exit 1` deliberately makes the condition false after running the loader, so this line acts as a command hook rather than enabling SSH options in a matching block. Make sure `nfc-key` is available in the environment used by `ssh`; use its absolute path if needed.
