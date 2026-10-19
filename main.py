@@ -26,6 +26,12 @@ def main():
     parser.add_argument("cmd", choices=("prepare", "pub", "load"))
     parser.add_argument("--reader", default=None)
     parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help=f"tag byte offset for this key's {SSH.PRIVATE_SEED_SIZE}-byte payload (default: 0)",
+    )
+    parser.add_argument(
         "--timeout", type=int, default=60, help="agent key lifetime in seconds"
     )
     parser.add_argument(
@@ -34,6 +40,13 @@ def main():
         help="skip load if ssh-agent already has an identity commented 'stdin'",
     )
     args = parser.parse_args()
+
+    try:
+        start_block = NFCTag.start_block_for_byte_range(
+            args.offset, SSH.PRIVATE_SEED_SIZE
+        )
+    except ValueError as error:
+        parser.error(str(error))
 
     if args.cmd == "load" and args.only_missing:
         try:
@@ -66,9 +79,11 @@ def main():
         if args.cmd == "prepare":
             private_bytes, private_key = SSH.private_bytes_generate()
             # Store only the masked seed on the tag.
-            tag.write_mem(0, _xor_bytes(private_bytes, mask))
+            tag.write_mem(start_block, _xor_bytes(private_bytes, mask))
         else:  # read for "load" or "pub" command
-            private_bytes = _xor_bytes(tag.read_mem(0, 32), mask)
+            private_bytes = _xor_bytes(
+                tag.read_mem(start_block, SSH.PRIVATE_SEED_SIZE), mask
+            )
             openssh_key, private_key = SSH.openssh_from_private_bytes(private_bytes)
     finally:
         connection.disconnect()

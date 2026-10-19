@@ -4,7 +4,7 @@ This Python CLI stores an XOR-masked Ed25519 private-key seed on an NFC tag and 
 
 ## NFC reader and tag
 
-Developed and tested with an **Alcor Link AK9567** reader and an **NXP ICODE SLIX-compatible ISO 15693** tag. The NFC helper sends 4-byte block read/write commands through PC/SC (`FF B0` and `FF D6`); compatibility depends on the PC/SC stack and reader APDU handling. The tool uses block index 0 as the starting point for its 32-byte payload.
+Developed and tested with an **Alcor Link AK9567** reader and an **NXP ICODE SLIX-compatible ISO 15693** tag. The NFC helper sends 4-byte block read/write commands through PC/SC (`FF B0` and `FF D6`); compatibility depends on the PC/SC stack and reader APDU handling. By default, the tool stores its 32-byte payload at byte offset 0; `--offset` selects another byte offset.
 
 By default, the tool selects the first reader whose reported name contains `contactless`. `--reader` is optional and can select a reader explicitly by its exact PC/SC name, for example `--reader "Alcor Link AK9567"`.
 
@@ -46,10 +46,22 @@ The seed in `~/.ssh/id_ed25519` is used as a **mask**, not as the identity that 
 ## Commands
 
 ```sh
-./main.py prepare [--reader READER]
-./main.py pub [--reader READER]
-./main.py load [--reader READER] [--timeout SECONDS] [--only-missing]
+./main.py prepare [--reader READER] [--offset BYTES]
+./main.py pub [--reader READER] [--offset BYTES]
+./main.py load [--reader READER] [--offset BYTES] [--timeout SECONDS] [--only-missing]
 ```
+
+### Multi-key offsets
+
+`--offset` is a byte offset from the start of tag memory, shared by `prepare`, `pub`, and `load`; it defaults to `0`. The offset must be non-negative and aligned to the tag's 4-byte block size. Use the same offset for every operation on a key, and choose separate non-overlapping 32-byte ranges for different keys. For example, prepare a second key at byte offset 32, then read or load that key with the same offset:
+
+```sh
+./main.py prepare --offset 32
+./main.py pub --offset 32
+./main.py load --offset 32
+```
+
+The tag must have enough writable memory for each selected range.
 
 ### Provision (once per generated identity)
 

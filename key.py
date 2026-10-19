@@ -3,6 +3,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 class SSH:
+    PRIVATE_SEED_SIZE = 32
+
     @staticmethod
     def private_bytes_generate() -> tuple[bytes, Ed25519PrivateKey]:
         priv_key = Ed25519PrivateKey.generate()
@@ -33,6 +35,10 @@ class SSH:
 
     @staticmethod
     def openssh_from_private_bytes(seed: bytes) -> tuple[str, Ed25519PrivateKey]:
+        if len(seed) != SSH.PRIVATE_SEED_SIZE:
+            raise ValueError(
+                f"Ed25519 private seed must be {SSH.PRIVATE_SEED_SIZE} bytes"
+            )
         # Build an unencrypted OpenSSH key for the agent without a disk file.
         priv_key = Ed25519PrivateKey.from_private_bytes(seed)
         openssh_key = priv_key.private_bytes(

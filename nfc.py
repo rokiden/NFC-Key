@@ -21,7 +21,8 @@ def get_reader(name=None):
 
 class NFCTag:
     # PC/SC commands for block access and tag UID retrieval.
-    _BLOCK_SIZE = 4
+    BLOCK_SIZE = 4
+    BLOCK_COUNT = 0x100
     _READ_COMMAND = bytes.fromhex("FF B0 00")
     _WRITE_COMMAND = bytes.fromhex("FF D6 00")
     _GET_ID_COMMAND = bytes.fromhex("FF CA 00 00 00")
@@ -30,6 +31,23 @@ class NFCTag:
     def __init__(self, connection):
         self._connection = connection
 
+    @classmethod
+    def start_block_for_byte_range(cls, byte_offset, length):
+        if byte_offset < 0:
+            raise ValueError("byte offset must be non-negative")
+        if byte_offset % cls.BLOCK_SIZE:
+            raise ValueError(
+                f"byte offset must be aligned to {cls.BLOCK_SIZE}-byte blocks"
+            )
+        if length <= 0 or length % cls.BLOCK_SIZE:
+            raise ValueError(f"length must be a positive multiple of {cls.BLOCK_SIZE}")
+
+        start_block = byte_offset // cls.BLOCK_SIZE
+        block_count = length // cls.BLOCK_SIZE
+        if start_block + block_count > cls.BLOCK_COUNT:
+            raise ValueError("byte range exceeds the addressable block range")
+        return start_block
+
     def _transmit(self, apdu):
         response, sw1, sw2 = self._connection.transmit(apdu)
         if (sw1, sw2) != self._SUCCESS_STATUS:
@@ -37,29 +55,29 @@ class NFCTag:
         return bytes(response)
 
     def read_mem(self, start_block, length):
-        if length % self._BLOCK_SIZE:
-            raise ValueError(f"length must be a multiple of {self._BLOCK_SIZE}")
+        if length % self.BLOCK_SIZE:
+            raise ValueError(f"length must be a multiple of {self.BLOCK_SIZE}")
 
         data = bytearray()
-        for block in range(start_block, start_block + length // self._BLOCK_SIZE):
-            apdu = [*self._READ_COMMAND, block, self._BLOCK_SIZE]
+        for block in range(start_block, start_block + length // self.BLOCK_SIZE):
+            apdu = [*self._READ_COMMAND, block, self.BLOCK_SIZE]
             chunk = self._transmit(apdu)
-            if len(chunk) != self._BLOCK_SIZE:
+            if len(chunk) != self.BLOCK_SIZE:
                 raise RuntimeError(
-                    f"block {block:02X}: expected {self._BLOCK_SIZE} bytes, got {len(chunk)}"
+                    f"block {block:02X}: expected {self.BLOCK_SIZE} bytes, got {len(chunk)}"
                 )
             data.extend(chunk)
         return bytes(data)
 
     def write_mem(self, start_block, data):
         data = bytes(data)
-        if len(data) % self._BLOCK_SIZE:
-            raise ValueError(f"data length must be a multiple of {self._BLOCK_SIZE}")
+        if len(data) % self.BLOCK_SIZE:
+            raise ValueError(f"data length must be a multiple of {self.BLOCK_SIZE}")
 
-        for offset in range(0, len(data), self._BLOCK_SIZE):
-            block = start_block + offset // self._BLOCK_SIZE
-            chunk = data[offset : offset + self._BLOCK_SIZE]
-            apdu = [*self._WRITE_COMMAND, block, self._BLOCK_SIZE, *chunk]
+        for offset in range(0, len(data), self.BLOCK_SIZE):
+            block = start_block + offset // self.BLOCK_SIZE
+            chunk = data[offset : offset + self.BLOCK_SIZE]
+            apdu = [*self._WRITE_COMMAND, block, self.BLOCK_SIZE, *chunk]
             self._transmit(apdu)
 
     def get_id(self):
